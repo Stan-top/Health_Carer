@@ -28,7 +28,7 @@
 
 #define LCD_DIR horizontal //vertical、horizontal。竖屏 / 横屏
 #define LCD_INVERT invert_en //invert_dis、invert_en。正着放 / 倒立
-#define LCD_MIRROR mirror_dis //mirror_dis、mirror_dis。不开启左右镜像显示 / 开启镜像显示（可用于镜面反射及棱镜的镜像显示，可使画面左右翻转。参照分光棱镜）
+#define LCD_MIRROR mirror_dis //mirror_dis、mirror_en。不开启左右镜像显示 / 开启镜像显示（可用于镜面反射及棱镜的镜像显示，可使画面左右翻转。参照分光棱镜）
 
 /**
  * @brief LCD的GPIO定义。（CS尽量使用IOMUX默认的SPI，DC/RST/BLK随意）（CLK、MOSI、MISO在 spi_config.h 中定义）
@@ -151,6 +151,50 @@ DRAM_ATTR static const lcd_init_cmd_t st_7789V_init_cmds[]={
  * @return
  *     - none
  */
+void lcd_cmd(spi_device_handle_t spi,const uint8_t cmd);
 
+/**
+ * @brief  向LCD发送长度为len个字节的数据（D/C线电平为1）
+ *      - 发送时同时设置D/C线为1，传输数据
+ *      - 例：lcd_data(LCD_SPI, dataBuf, 10);
+ * 
+ * @param  spi LCD与SPI关联的句柄，通过此来调用SPI总线上的LCD设备
+ * @param  data 要发送数据的指针
+ * @param  len 发送的字节数
+ * 
+ * @return
+ *     - none
+ */
+void lcd_data(spi_device_handle_t spi,const uint8_t *data,int len);
+
+
+/**
+ * @brief  向LCD发送单点16Bit的像素数据，（根据驱动IC的不同，可能为2或3个字节，需要转换RGB565、RGB666）
+ *      - ili9488\ili9481 这类IC，SPI总线仅能使用RGB666-18Bit/像素，分3字节传输。而不能使用16Bit/像素，分2字节传输。（0x3A寄存器）
+ *      - 例：lcd_data16(LCD_SPI, RED);
+ * 
+ * @param  spi LCD与SPI关联的句柄，通过此来调用SPI总线上的LCD设备
+ * @param  data 要发送的单点像素数据，uint16_t的RGB565
+ * 
+ * @return
+ *     - none
+ */
+
+void lcd_16data(spi_device_handle_t spi,uint16_t data);
+
+/**
+ * @brief  以SPI方式驱动LCD初始化函数
+ *      - 过程包括：关联 SPI总线及LCD设备、驱动IC的参数配置、点亮背光、设置LCD的安装方向、设置屏幕分辨率、扫描方向、初始化显示区域的大小
+ *      - （注意：普通GPIO最大只能30MHz，而IOMUX默认的SPI，CLK最大可以设置到80MHz）
+ *      - 例：spi_lcd_init(SPI2_HOST, 60*1000*1000, LCD_SPI2_DEF_PIN_NUM_CS0);
+ * 
+ * @param  host_id SPI端口号。SPI1_HOST / SPI2_HOST / SPI3_HOST
+ * @param  clk_speed LCD设备的SPI速度（注意：普通GPIO最大只能30MHz，而IOMUX默认的SPI，CLK最大可以设置到80MHz）
+ * @param  cs_io_num CS端口号，尽量使用IOMUX默认的IO
+ * 
+ * @return
+ *     - none
+ */
+void spi_lcd_init(spi_host_device_t host_id, uint32_t clk_speed, gpio_num_t cs_io_num);
 
 #endif
