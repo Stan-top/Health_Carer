@@ -1,4 +1,4 @@
-# Install script for directory: C:/Users/Stan/Desktop/Smart_Watch/Soft/Health_Carer/main
+# Install script for directory: C:/Users/Stan/Desktop/Health_Carer/Health_Carer/Health_Carer/main
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)

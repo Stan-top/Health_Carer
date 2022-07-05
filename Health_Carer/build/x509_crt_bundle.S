@@ -1,4 +1,4 @@
-/* * Data converted from C:/Users/Stan/Desktop/Smart_Watch/Soft/Health_Carer/build/esp-idf/mbedtls/x509_crt_bundle
+/* * Data converted from C:/Users/Stan/Desktop/Health_Carer/Health_Carer/Health_Carer/build/esp-idf/mbedtls/x509_crt_bundle
  */
 .data
 .section .rodata.embedded
