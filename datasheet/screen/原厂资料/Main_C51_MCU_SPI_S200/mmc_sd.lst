@@ -1,0 +1,227 @@
+C51 COMPILER V9.00   MMC_SD                                                                04/14/2022 20:28:14 PAGE 1   
+
+
+C51 COMPILER V9.00, COMPILATION OF MODULE MMC_SD
+OBJECT MODULE PLACED IN mmc_sd.obj
+COMPILER INVOKED BY: D:\Keil C51\C51\BIN\C51.EXE mmc_sd\mmc_sd.c COMPACT BROWSE DEBUG OBJECTEXTEND PRINT(.\mmc_sd.lst) O
+                    -BJECT(mmc_sd.obj)
+
+line level    source
+
+   1          #include "c8051F340.h"
+   2          #include <main.h>
+   3          #include <mmc_sd\mmc_sd.h>
+   4          
+   5          xdata unsigned char buffer[512];
+   6          
+   7          unsigned char SPI_WriteByte(uint8 val)
+   8          {
+   9   1          unsigned char ret;
+  10   1      
+  11   1          SPI0DAT = val;
+  12   1          while(!SPIF);                      
+  13   1          SPIF = 0;
+  14   1          ret = SPI0DAT;
+  15   1          return ret;          
+  16   1      }
+  17          
+  18          unsigned char SPI_ReadByte(void)
+  19          {   
+  20   1          unsigned char ret;
+  21   1      
+  22   1              SPI0DAT  = 0xff;
+  23   1          while (!SPIF);
+  24   1              SPIF = 0;  
+  25   1              ret = SPI0DAT;
+  26   1          return ret;
+  27   1      }
+  28          
+  29          unsigned char MMC_SD_SendCommand(uint8 cmd, uint32 arg)
+  30          {
+  31   1              unsigned char r1;
+  32   1              unsigned char retry=0;
+  33   1              
+  34   1              SPI_WriteByte(0xff);
+  35   1              SPI_WriteByte(0xff);
+  36   1              SPI_WriteByte(0xff);
+  37   1              SPI_WriteByte(0xff);
+  38   1              SPI_WriteByte(0xff);
+  39   1              SPI_WriteByte(0xff);
+  40   1      
+  41   1              SPI_CS_Assert();
+  42   1              
+  43   1              SPI_WriteByte(cmd | 0x40);
+  44   1              SPI_WriteByte(arg>>24);
+  45   1              SPI_WriteByte(arg>>16);
+  46   1              SPI_WriteByte(arg>>8);
+  47   1              SPI_WriteByte(arg); 
+  48   1              SPI_WriteByte(0x95); 
+  49   1              
+  50   1              while((r1 = SPI_WriteByte(0xff)) == 0xff)
+  51   1                      if(retry++ > 100) break;  //time out error
+  52   1      
+  53   1              SPI_CS_Deassert();
+  54   1      
+C51 COMPILER V9.00   MMC_SD                                                                04/14/2022 20:28:14 PAGE 2   
+
+  55   1              return r1;
+  56   1      }
+  57          
+  58          unsigned char MMC_SD_Reset(void)
+  59          {
+  60   1              unsigned char i;
+  61   1              unsigned char retry;
+  62   1              unsigned char r1=0;
+  63   1      
+  64   1              retry = 0;
+  65   1              CLKSEL = 0x03;
+  66   1              SPI0CKR   = (48000000/(2*400000)) - 1;  
+  67   1              do
+  68   1              {
+  69   2                      for(i=0;i<100;i++) SPI_WriteByte(0xff);
+  70   2                      r1 = MMC_SD_SendCommand(0, 0);  //send idle command
+  71   2                      retry++;
+  72   2                      if(retry>10) break;     //time out
+  73   2              } while(r1 != 0x01);    
+  74   1      
+  75   1              retry = 0;
+  76   1              do
+  77   1              {
+  78   2                  do
+  79   2                  {
+  80   3                          r1 = MMC_SD_SendCommand(55, 0);     
+  81   3                          retry++;
+  82   3                          if(retry>100) return 1;     //time out
+  83   3                  } while(r1!=0X01);
+  84   2      
+  85   2                  retry = 0;
+  86   2                      r1 = MMC_SD_SendCommand(41, 0); 
+  87   2                      retry++;
+  88   2                      if(retry>100) return 1; //time out
+  89   2              } while(r1!=0X00);
+  90   1      
+  91   1              if (r1!=0X00)
+  92   1              {
+  93   2                  retry = 0;
+  94   2                  do
+  95   2                  {
+  96   3                          r1 = MMC_SD_SendCommand(1, 0);      //send active command
+  97   3                          retry++;
+  98   3                          if(retry>100) return 1;     //time out
+  99   3                  } while(r1);
+ 100   2              }
+ 101   1              r1 = MMC_SD_SendCommand(59, 0); //disable CRC
+ 102   1      
+ 103   1              r1 = MMC_SD_SendCommand(16, 512);       //set sector size to 512
+ 104   1          SPI0CKR   = (48000000/(2*12000000)) - 1; 
+ 105   1              CLKSEL = 0x00;
+ 106   1              return 0;       
+ 107   1      }
+ 108          
+ 109          unsigned char MMC_SD_ReadSingleBlock(uint32 sector)
+ 110          {
+ 111   1              unsigned char r1;
+ 112   1              unsigned int i;
+ 113   1              unsigned char retry=0;
+ 114   1      
+ 115   1              CLKSEL = 0x03;
+ 116   1              do
+C51 COMPILER V9.00   MMC_SD                                                                04/14/2022 20:28:14 PAGE 3   
+
+ 117   1              {
+ 118   2                      r1 = MMC_SD_SendCommand(17, sector<<9); //read command
+ 119   2                      retry++;
+ 120   2                      if(retry>10) return 1;  //time out
+ 121   2              } while(r1 != 0x00);    
+ 122   1      
+ 123   1      
+ 124   1              SPI_CS_Assert(); //wait to start recieve data
+ 125   1              
+ 126   1              while(SPI_ReadByte() != 0xfe);
+ 127   1      
+ 128   1              for(i=0; i<512; i++)    //read 512 bytes
+ 129   1              {
+ 130   2                      buffer[i] = SPI_ReadByte();
+ 131   2              }
+ 132   1      
+ 133   1              SPI_WriteByte(0xff);//crc
+ 134   1              SPI_WriteByte(0xff);
+ 135   1              
+ 136   1              SPI_CS_Deassert();
+ 137   1              CLKSEL = 0x00;
+ 138   1              return 0;
+ 139   1      }
+ 140          
+ 141          unsigned char MMC_SD_WriteSingleBlock(uint32 sector)
+ 142          {
+ 143   1              unsigned char r1;
+ 144   1              unsigned int i;
+ 145   1              unsigned char retry=0;
+ 146   1      
+ 147   1              CLKSEL = 0x03;
+ 148   1              do
+ 149   1              {
+ 150   2                      r1 = MMC_SD_SendCommand(24, sector<<9);//send command
+ 151   2                      retry++;
+ 152   2                      if(retry>10) return 1;          //time out
+ 153   2              } while(r1 != 0x00);    
+ 154   1      
+ 155   1      
+ 156   1      
+ 157   1              SPI_CS_Assert();
+ 158   1              
+ 159   1              SPI_WriteByte(0xff);
+ 160   1      
+ 161   1              SPI_WriteByte(0xfe);                    //send start byte
+ 162   1              
+ 163   1              for(i=0; i<512; i++)            //send 512 bytes data
+ 164   1              {
+ 165   2                      SPI_WriteByte(buffer[i]);   
+ 166   2              }
+ 167   1              
+ 168   1              SPI_WriteByte(0xff);
+ 169   1              SPI_WriteByte(0xff);
+ 170   1              
+ 171   1              r1 = SPI_WriteByte(0xff);
+ 172   1              
+ 173   1              if( (r1&0x1f) != 0x05)
+ 174   1              {
+ 175   2                      SPI_CS_Deassert();
+ 176   2                      return r1;
+ 177   2              }
+ 178   1                              
+C51 COMPILER V9.00   MMC_SD                                                                04/14/2022 20:28:14 PAGE 4   
+
+ 179   1              while(!SPI_WriteByte(0xff));
+ 180   1      
+ 181   1              SPI_CS_Deassert();
+ 182   1              CLKSEL = 0x00;
+ 183   1              return 0;
+ 184   1      }
+ 185          
+ 186          #ifdef USE_SD_INIT
+ 187          void SD_Init(void)
+ 188          {
+ 189   1          unsigned char n=0;
+ 190   1      
+ 191   1          while(MMC_SD_Reset())
+ 192   1          {
+ 193   2                  n++;
+ 194   2                  if(n>3)break;
+ 195   2          }
+ 196   1      }
+ 197          #endif
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    575    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =    512    ----
+   PDATA SIZE       =   ----      13
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

@@ -1,0 +1,241 @@
+C51 COMPILER V9.00   TP                                                                    04/14/2022 20:28:14 PAGE 1   
+
+
+C51 COMPILER V9.00, COMPILATION OF MODULE TP
+OBJECT MODULE PLACED IN tp.obj
+COMPILER INVOKED BY: D:\Keil C51\C51\BIN\C51.EXE tp\tp.c COMPACT BROWSE DEBUG OBJECTEXTEND PRINT(.\tp.lst) OBJECT(tp.obj
+                    -)
+
+line level    source
+
+   1          #include "c8051F340.h"
+   2          #include <intrins.h>
+   3          #include <absacc.h>
+   4           
+   5          #include<main.h>
+   6          #include<mmc_sd\mmc_sd.h>
+   7          #include<lcd\lcd.h>
+   8          #include <tp\tp.h>
+   9          
+  10          #ifdef TP_TEST
+  11          #if 0
+              unsigned int TP_GetPosition(unsigned char cmd);
+              
+              
+              //增加TP校准程序
+              long int  xdata Tp_a,Tp_b,Tp_c,Tp_d,Tp_e,Tp_f;
+              void Tp_Adjust(void)
+              {
+                      unsigned long int X[3],Y[3];
+              
+                      DispStr("+",6,2,RED,WHITE);
+                      TP_PENIRQ = 1;
+                      while (TP_PENIRQ) 
+                      {
+                              while(!TP_PENIRQ)
+                              {        
+                                      X[0]=TP_GetPosition(0xd0);      
+                                      Y[0]=TP_GetPosition(0x90);
+                                      Delay(15);
+                              }
+                              Delay(50);
+                      } 
+                      DispStr("+",116,152,RED,WHITE);
+                      TP_PENIRQ = 1; 
+                      Delay(5000);
+                      while (TP_PENIRQ)
+                      {       
+                              while(!TP_PENIRQ)
+                              {        
+                                      X[1]=TP_GetPosition(0xd0);      
+                                      Y[1]=TP_GetPosition(0x90);
+                                      Delay(15);
+                              }
+                              Delay(50);
+                      }
+              
+                      DispStr("+",206,302,RED,WHITE);
+                      TP_PENIRQ = 1;
+                      Delay(5000);
+                      while (TP_PENIRQ)
+                      {
+                              while(!TP_PENIRQ)
+                              {        
+                                      X[2]=TP_GetPosition(0xd0);      
+C51 COMPILER V9.00   TP                                                                    04/14/2022 20:28:14 PAGE 2   
+
+                                      Y[2]=TP_GetPosition(0x90);
+                                      Delay(15);
+                              }
+                      }
+                      Delay(50);
+              
+                      Tp_a=200*(Y[1]-Y[2])-110*(Y[0]-Y[2]);
+                      Tp_b=(X[0]-X[2])*110-200*(X[1]-X[2]);
+                      Tp_c=Y[0]*(120*X[2]-10*X[1])+Y[1]*(10*X[0]-210*X[2])+Y[2]*(210*X[1]-120*X[0]);
+                      Tp_d=300*(Y[1]-Y[2])-150*(Y[0]-Y[2]);
+                      Tp_e=150*(X[0]-X[2])-300*(X[1]-X[2]);
+                      Tp_f=Y[0]*(160*X[2]-10*X[1])+Y[1]*(10*X[0]-310*X[2])+Y[2]*(310*X[1]-160*X[1]);
+              
+              }
+              
+              
+              ////add by rao 2016.6.21
+              #endif
+  73          void TP_Write(unsigned char cmd)
+  74          {
+  75   1              unsigned char xdata i;
+  76   1      
+  77   1              TP_CS=0;
+  78   1              TP_DCLK=0;
+  79   1      
+  80   1              for(i=0;i<8;i++)
+  81   1              {
+  82   2                      if((cmd&0x80)==0)
+  83   2                      TP_DIN=0;
+  84   2                      else
+  85   2                      TP_DIN=1;
+  86   2                      TP_DCLK=1;
+  87   2                      cmd=cmd<<1;
+  88   2                      TP_DCLK=0;//be low ,before read
+  89   2              }
+  90   1      }
+  91          
+  92          unsigned int TP_Read(void)
+  93          {
+  94   1              unsigned char xdata i;
+  95   1              long int xdata  val=0;
+  96   1      
+  97   1              TP_CS=0;
+  98   1              TP_DOUT = 1;
+  99   1      
+ 100   1              for(i=0;i<12;i++)
+ 101   1              {
+ 102   2                      TP_DCLK=0;
+ 103   2                      if(TP_DOUT)
+ 104   2                      {
+ 105   3                              val=val|(1<<(11-i));
+ 106   3                      }
+ 107   2                      TP_DCLK=1;
+ 108   2              }
+ 109   1      
+ 110   1              TP_CS=1;
+ 111   1              return val;
+ 112   1      }
+ 113          
+ 114          unsigned int TP_GetPosition(unsigned char cmd)
+ 115          {
+ 116   1              unsigned int xdata temp;
+C51 COMPILER V9.00   TP                                                                    04/14/2022 20:28:14 PAGE 3   
+
+ 117   1              unsigned char xdata i=0,j=0,k=0;
+ 118   1              unsigned int  xdata TP[11];
+ 119   1      
+ 120   1              TP_PENIRQ = 1;
+ 121   1      
+ 122   1              while((i<11)&&(!TP_PENIRQ))
+ 123   1              {
+ 124   2                      TP_CS=0;
+ 125   2                      TP_Write(cmd+1);
+ 126   2                      TP[i]=TP_Read();
+ 127   2                      i++;
+ 128   2                      TP_CS=1;
+ 129   2              }
+ 130   1              if(i!=0)
+ 131   1              {
+ 132   2                      for(j=0;j<i;j++)
+ 133   2                              for(k=0;k<i-j;k++)
+ 134   2                                      if (*(TP+k)>*(TP+k+1))
+ 135   2                                              {
+ 136   3                                              temp=*(TP+k);
+ 137   3                                              *(TP+k)=*(TP+k+1);
+ 138   3                                              *(TP+k+1)=temp;
+ 139   3                                      }
+ 140   2                      return (TP[i/2]);
+ 141   2              }
+ 142   1              else
+ 143   1                      return 0;
+ 144   1      }
+ 145          
+ 146          void TP_DrawLine(void)
+ 147          {
+ 148   1              unsigned long int  xdata gx=0,gy=0;       
+ 149   1              unsigned long int  xdata tx=0,ty=0;           
+ 150   1              unsigned long int  xdata gxtemp=0,gytemp=0;           
+ 151   1      
+ 152   1              DispColor(BLACK);       //TP测试黑色画面
+ 153   1      //      DrawGird(GRAY25);       //TP测试网格画面
+ 154   1              DispStr("TP TEST",0,0,BLACK,WHITE);      //TP测试画面显示 TP TEST 字符
+ 155   1      
+ 156   1      
+ 157   1              TP_PENIRQ = 1;
+ 158   1              while (TP_PENIRQ) ;
+ 159   1      
+ 160   1              while(1)
+ 161   1              {
+ 162   2      
+ 163   2                      while(KEY_STEP)
+ 164   2                      {       
+ 165   3                              Delay(50);//!
+ 166   3                              while(!TP_PENIRQ)
+ 167   3                              {        
+ 168   4                                      #if 1
+ 169   4                                      tx=TP_GetPosition(0xd0);
+ 170   4                                      gx=(tx-X_min)*(unsigned long int)(COL)/((X_max-X_min))*0.77;
+ 171   4                      
+ 172   4                                      ty=TP_GetPosition(0x90);
+ 173   4                                      gy=(ty-Y_min)*(unsigned long int)(ROW)/((Y_max-Y_min))*0.95;
+ 174   4      
+ 175   4                                      Delay(10);//
+ 176   4                              //nv3029g从IC侧刷屏       240*320
+ 177   4                              //      gx=240-gx;      
+ 178   4                              //      gy=320-gy;
+C51 COMPILER V9.00   TP                                                                    04/14/2022 20:28:14 PAGE 4   
+
+ 179   4      
+ 180   4                              //nv3029g从IC侧刷屏       320*480
+ 181   4      //                              gx=320-gx;      
+ 182   4      //                              gy=480-gy;
+ 183   4      
+ 184   4                              ////    touch panel must be interrupted
+ 185   4                                      if((!TP_PENIRQ)&&(gx>=0&&gx<COL)&&(gy>=0&&gy<ROW))
+ 186   4                                      {                                                                               
+ 187   5      //                                      DispInt(gx,50,10,BLUE,WHITE);   //校正用
+ 188   5      //                                      DispInt(gy,50,50,BLUE,WHITE);
+ 189   5                                              PutPixel(gx,gy,RED); 
+ 190   5                                      }
+ 191   4                                      else 
+ 192   4                                      {
+ 193   5      //                                      DispColor(0xf800);
+ 194   5      //                                      DispInt(gx>>16,10,10,RED,WHITE);         DispInt(gx,50,10,RED,WHITE);
+ 195   5      //                                      DispInt(gy>>16,10,50,RED,WHITE);         DispInt(gy,50,50,RED,WHITE);
+ 196   5                                      }
+ 197   4                                      #endif
+ 198   4      
+ 199   4                              }
+ 200   3      
+ 201   3                              
+ 202   3                      }
+ 203   2                      
+ 204   2                      DispColor(BLACK);
+ 205   2      //              DrawGird(GRAY25);
+ 206   2                      DispStr("TP TEST",0,0,BLACK,WHITE);
+ 207   2      
+ 208   2              }
+ 209   1      
+ 210   1      }
+ 211          #endif
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    908    ----
+   CONSTANT SIZE    =      8    ----
+   XDATA SIZE       =   ----      57
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)
